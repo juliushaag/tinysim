@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import mujoco as mj
 import yaml
-ROBOTS_PATH = Path(__file__).parent / "../../models/robots"
- 
+
+ROBOTS_PATH = Path(__file__).parent / "../../models/robots" 
 ROBOTS = { path.name : path for path in ROBOTS_PATH.iterdir() }
 
 
@@ -15,7 +15,10 @@ class RobotConfig:
   joint_pos_min: list[float]
   joint_pos_max: list[float]
 
-class Robot():
+def load_robot(name : str) -> "Robot":
+  return Robot.load(name)
+
+class Robot:
 
   @classmethod
   def load(cls, robot_name : str) -> "Robot":

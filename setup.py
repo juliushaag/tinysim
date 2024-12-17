@@ -9,5 +9,5 @@ setup(
   author='Julius Haag',
   author_email='haag.julius@outlook.de',
   packages=['tinysim.models'],
-  requires=['mujoco', "trimesh", "pyyaml"]
+  requires=['mujoco', "trimesh", "pyyaml", "websockets"]
 )

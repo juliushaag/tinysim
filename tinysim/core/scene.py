@@ -17,14 +17,14 @@ import json
 from hashlib import md5
 
 class SceneVisualType(str, Enum):
-    CUBE = "CUBE"
-    SPHERE = "SPHERE"
-    CAPSULE = "CAPSULE"
-    CYLINDER = "CYLINDER"
-    PLANE = "PLANE"
-    QUAD = "QUAD"
-    MESH = "MESH"
-    NONE = "NONE"
+  CUBE = "CUBE"
+  SPHERE = "SPHERE"
+  CAPSULE = "CAPSULE"
+  CYLINDER = "CYLINDER"
+  PLANE = "PLANE"
+  QUAD = "QUAD"
+  MESH = "MESH"
+  NONE = "NONE"
 
 
 @dataclass
@@ -36,22 +36,22 @@ class SceneMaterial:
   shininess: float = 0.5
   reflectance: float = 0.0
   texture: Optional[str] = None
+  texrepeat: np.ndarray = field(default_factory=lambda: np.array([1, 1]))
 
 
 @dataclass
 class SceneMesh:
     name: str
-    hash : str
-    verticesLayout: Tuple[int, int]
-    indicesLayout: Tuple[int, int]
-    uvLayout: Tuple[int, int]
-    normalsLayout: Tuple[int, int]
+    vertices: np.ndarray
+    indices: np.ndarray
+    normals: np.ndarray
+    uvs: np.ndarray
 
 
 @dataclass
 class SceneTexture:
     name: str
-    hash: str
+    data: np.ndarray
     width: int = 0
     height: int = 0
     textureType: str = "2D"
@@ -59,37 +59,36 @@ class SceneTexture:
 
 
 @dataclass
-class SceneTransform:
-    pos: List[float] = field(default_factory=lambda: [0, 0, 0])
-    rot: List[float] = field(default_factory=lambda: [0, 0, 0, 1])
-    scale: List[float] = field(default_factory=lambda: [1, 1, 1])
-
-@dataclass
 class SceneVisual:
     name: str
+    group : int
     type: SceneVisualType
-    trans: SceneTransform
     color: list[float]
+    position: List[float] = field(default_factory=lambda: np.zeros(3))
+    quaternion: List[float] = field(default_factory=lambda: np.array([1, 0, 0, 0]))
+    scale: List[float] = field(default_factory=lambda: np.ones(3))
     material: Optional[str] = None
     mesh: Optional[str] = None
 
 @dataclass
 class SceneObject:
     name: str
-    group: int
-    trans: SceneTransform = field(default_factory=SceneTransform)
-    visuals: List[SceneVisual] = field(default_factory=list)
-    children: List["SceneObject"] = field(default_factory=list)
+    id : int = -1
+    movable: bool = False
+    position: List[float] = field(default_factory=lambda: np.zeros(3))
+    quaternion: List[float] = field(default_factory=lambda: np.array([1, 0, 0, 0]))
+    visuals: List[SceneVisual] = field(default_factory=lambda: list())
+    children: List["SceneObject"] = field(default_factory=lambda: list())
 
 MJ2TINYSIM = {
-    mj.mjtGeom.mjGEOM_SPHERE: SceneVisualType.SPHERE,
-    mj.mjtGeom.mjGEOM_CAPSULE: SceneVisualType.CAPSULE,
-    mj.mjtGeom.mjGEOM_ELLIPSOID: SceneVisualType.CAPSULE,
-    mj.mjtGeom.mjGEOM_CYLINDER: SceneVisualType.CYLINDER,
-    mj.mjtGeom.mjGEOM_BOX: SceneVisualType.CUBE,
-    mj.mjtGeom.mjGEOM_MESH: SceneVisualType.MESH,
-    mj.mjtGeom.mjGEOM_PLANE: SceneVisualType.PLANE,
-  }
+  mj.mjtGeom.mjGEOM_SPHERE: SceneVisualType.SPHERE,
+  mj.mjtGeom.mjGEOM_CAPSULE: SceneVisualType.CAPSULE,
+  mj.mjtGeom.mjGEOM_ELLIPSOID: SceneVisualType.CAPSULE,
+  mj.mjtGeom.mjGEOM_CYLINDER: SceneVisualType.CYLINDER,
+  mj.mjtGeom.mjGEOM_BOX: SceneVisualType.CUBE,
+  mj.mjtGeom.mjGEOM_MESH: SceneVisualType.MESH,
+  mj.mjtGeom.mjGEOM_PLANE: SceneVisualType.PLANE,
+}
 
 
 SCENES_PATH = (Path(__file__).parent / "../../models/scenes").resolve()
@@ -102,6 +101,8 @@ class SceneConfig:
   definition: str
   robot_mount_points: Union[str, list]
 
+def load_scene(name : str) -> "Scene":
+  return Scene.load(name)
 
 class Scene:
 
@@ -121,7 +122,7 @@ class Scene:
     scene_config.definition = str(SCENES[scene_name] / scene_config.definition)
 
     return cls(scene_config)
-
+  
 
   def __init__(self, conf : SceneConfig) -> None:
 
@@ -136,7 +137,7 @@ class Scene:
 
     self.robots = []
     self.mount_points : dict[str, Optional[Robot]]= { name : None for name in mount_points }
-
+    self.compiled = False
 
   def attach(self, robot : Robot, mount_point = None):
 
@@ -148,7 +149,7 @@ class Scene:
       assert len(free_mounts) > 0, "Not more free mounts to attach to"
       self.mount_points[free_mounts[0]] = robot
     
-  def compile(self) -> mj.MjModel:
+  def compile(self):
 
     scene_spec = self.xml_spec
 
@@ -163,73 +164,59 @@ class Scene:
       robot_frame.attach_body(xml_robot.worldbody, robot.name, '')
 
 
-    model = scene_spec.compile()
+    self.mj_model = scene_spec.compile()
+    self.compiled = True
     self.id: str = md5(scene_spec.to_xml().encode()).hexdigest()
 
-    self.root = SceneObject("world", group=0) 
-    root = scene_spec.worldbody 
-
-    self.load_bodys(root, self.root, model)
-
-    self.load_assets(model)
     
-    return model
+    self.root = self.load_bodys(self.mj_model)
 
-
-  def load_bodys(self, parent_spec: mj.MjSpec, body: SceneObject, model : mj.MjModel): 
-
-    for geom_spec in parent_spec.geoms:
-      
-      type = MJ2TINYSIM[geom_spec.type]
-
-      visual = SceneVisual(
-        name=geom_spec.name,
-        type=type,
-        trans=SceneTransform(model.geom_pos[geom_spec.id], model.geom_quat[geom_spec.id], geom_spec.size if type != SceneVisualType.MESH else [1, 1, 1]),
-        material=geom_spec.material,
-        color=geom_spec.rgba,
-        mesh= None if geom_spec.meshname == "" else geom_spec.meshname
-      )
-      body.visuals.append(visual)
-      
+    self.materials = [self.load_material(self.mj_model.material(i)) for i in range(self.mj_model.nmat)]    
+    self.meshes = [self.load_mesh(self.mj_model.mesh(i), self.mj_model) for i in range(self.mj_model.nmesh)]
+    self.textures = [self.load_texture(self.mj_model.tex(i), self.mj_model, i) for i in range(self.mj_model.ntex)]
     
-    for body_spec in parent_spec.bodies:
-      child = SceneObject(
-        name=body_spec.name,
-        trans=SceneTransform(model.body_pos[body_spec.id], model.body_quat[body_spec.id]),
-        group=0
+
+
+  def load_bodys(self, model : mj.MjModel): 
+
+    bodies = {}
+    for body_id in range(model.nbody):
+      body = model.body(body_id)
+      
+      bod = SceneObject(
+        name=body.name,
+        position=body.pos, 
+        quaternion=body.quat,
+        movable = len(body.jntnum) > 0,
+        id = body_id
       )
 
-      body.children.append(child)
+      bodies[body_id] = bod
+      if body_id != body.parentid.item():
+        bodies[body.parentid.item()].children.append(bod)
 
-      self.load_bodys(body_spec, child, model)
+      for geom_id in range(body.geomadr.item(), body.geomadr.item() + body.geomnum.item()):
 
-  def load_assets(self, model : mj.MjModel):
-    
-    self.assets = dict()
-    self.meshes = list()
-    self.textures = list()
-    self.materials = list()
+        geom = model.geom(geom_id)
+        type = MJ2TINYSIM[geom.type.item()]
+        
+        visual = SceneVisual(
+          name=geom.name,
+          type=type,
+          color=geom.rgba,
+          group=geom.group,
+          position=geom.pos,
+          quaternion=geom.quat, 
+          scale=geom.size if type != SceneVisualType.MESH else [1, 1, 1],
+          material= None if geom.matid == -1 else model.material(geom.matid).name,
+          mesh= None if geom.dataid == -1 else model.mesh(geom.dataid).name
+        )
 
-    for i in range(model.nmesh):
-      mesh = model.mesh(i)
-      scene_mesh, data = self.load_mesh(mesh, model)
-      self.assets[scene_mesh.hash] = data
-      self.meshes.append(scene_mesh)
+        bod.visuals.append(visual)
 
+    return bodies[0]
 
-    for i in range(model.nmat):
-      material = self.load_material(model.material(i))
-      self.materials.append(material)
-
-    
-    for i in range(model.ntex):
-      texture = model.tex(i)
-      scene_texture, data = self.load_texture(texture, model, i)
-      self.textures.append(scene_texture)
-      self.assets[scene_texture.hash] = data
-
-  def load_texture(self, texture, model, id) -> tuple[SceneTexture, bytes]:
+  def load_texture(self, texture, model, id) -> SceneTexture:
 
     height = texture.height.item()
     width = texture.width.item()
@@ -237,82 +224,58 @@ class Scene:
     start_tex = model.tex_adr[id].item()
     size = height * width * 3
     
-    data: np.ndarray = model.tex_rgb[start_tex:start_tex + size]
-
-    bin_data = data.astype(np.uint8).tobytes()
-    
-    texture_hash = md5(bin_data).hexdigest()
-    texture = SceneTexture(
-        hash=texture_hash,
-        width=width,
-        height=height,
-        textureType="2D",
+    return SceneTexture(
+      name=texture.name,
+      data=np.copy(model.tex_data[start_tex:start_tex + size]).reshape((height, width, 3)),
+      width=width,
+      height=height,
+      textureType="2D",
     )
-    
-    return texture, bin_data
-    
 
   def load_material(self, material) -> SceneMaterial:
     return SceneMaterial(
         name=material.name,
         color=material.rgba,
-        emission=material.emission,
-        specular=material.specular,
-        shininess=material.shininess,
-        reflectance=material.reflectance,
+        emission=material.emission.item(),
+        specular=material.specular.item(),
+        shininess=material.shininess.item(),
+        reflectance=material.reflectance.item(),
         texture=None,
     )
      
 
-  def load_mesh(self, mesh, model) -> tuple[SceneMesh, bytes]:
+  def load_mesh(self, mesh, model) -> SceneMesh:
     
-    bin_buffer = io.BytesIO()
 
     # vertices
     start_vert = mesh.vertadr.item()
     num_verts = mesh.vertnum.item()
+
     vertices = model.mesh_vert[start_vert:start_vert + num_verts]
-    
-    vertices = vertices.copy().astype(np.float32).flatten()
-    vertices_layout = bin_buffer.tell(), vertices.shape[0]
-    bin_buffer.write(vertices)
+    vertices = vertices.copy().astype(np.float32)
     
     # normal 
-    norms = model.mesh_normal[start_vert:start_vert + num_verts]
-
-    norms = norms.copy().astype(np.float32).flatten()
-    normal_layout = bin_buffer.tell(), norms.shape[0]
-    bin_buffer.write(norms)
+    normals = model.mesh_normal[start_vert:start_vert + num_verts]
+    normals = normals.copy().astype(np.float32)
 
     # faces
     start_face = mesh.faceadr.item()
     num_faces = mesh.facenum.item()
-    faces = model.mesh_face[start_face:start_face + num_faces]
 
-    indices = faces.copy().astype(np.int32).flatten()
-    indices_layout = bin_buffer.tell(), indices.shape[0]
-    bin_buffer.write(indices)
+    faces = model.mesh_face[start_face:start_face + num_faces]
+    indices = faces.copy().astype(np.int32)
 
     # Texture coords
-    uv_layout = (0, 0)
+    uvs =  None
     start_uv = mesh.texcoordadr.item()
     if start_uv != -1:
-        num_texcoord = mesh.texcoordnum.item()
+      num_texcoord = mesh.texcoordnum.item()
+      uvs = model.mesh_texcoord[start_uv:start_uv + num_texcoord]
 
-        uvs = model.mesh_texcoord[start_uv:start_uv + num_texcoord].copy().flatten()
-        uv_layout = bin_buffer.tell(), uvs.shape[0]
-        bin_buffer.write(uvs)
-        
-    # create a SiMmesh object and raw data
-    bin_data = bin_buffer.getvalue()
-    hash = md5(bin_data).hexdigest()
-
-    mesh = SceneMesh(
+    return SceneMesh(
       name=mesh.name,
-      indicesLayout=indices_layout,
-      verticesLayout=vertices_layout,
-      normalsLayout=normal_layout,
-      uvLayout=uv_layout,
-      hash=hash
+      indices=indices,
+      vertices=vertices,
+      normals=normals,
+      uvs=uvs,
     )
-    return mesh, bin_data
