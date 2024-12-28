@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
   name='tinysim',
@@ -8,6 +8,6 @@ setup(
   description="Implementation of robotic basics using mujoco",
   author='Julius Haag',
   author_email='haag.julius@outlook.de',
-  packages=['tinysim.models'],
+  packages=find_packages(),
   requires=['mujoco', "trimesh", "pyyaml", "websockets"]
 )

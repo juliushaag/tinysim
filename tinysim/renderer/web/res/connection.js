@@ -39,7 +39,6 @@ class WebSocketConnection {
 
     const instr = event.data.substring(0, idx)
     const data = event.data.substring(idx + 1)
-    console.log(instr)
 
     let json_data = data ? JSON.parse(data) : null
     instructions[instr](json_data)

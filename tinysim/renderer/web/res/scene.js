@@ -25,7 +25,7 @@ class Scene {
     this.scene.add(ambientLight);
 
     const light = new THREE.DirectionalLight( 0xFFF4D6, 1.0 );
-    light.position.set( 50, -30, 0);
+    light.position.set( 15, -10, 0);
     this.scene.add(light)
 
     /* Background */

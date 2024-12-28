@@ -9,7 +9,6 @@ class RenderTransform:
   position: np.ndarray = field(default_factory=lambda: np.zeros(3))
   quaternion: np.ndarray = field(default_factory=lambda: np.array([1, 0, 0, 0]))
   scale : np.ndarray = field(default_factory=lambda: np.ones(3))
-  relative : bool = True
 
 class RenderPrimitiveType(str, Enum):
   CUBE = "CUBE"
@@ -66,3 +65,6 @@ class Renderer(ABC):
   def update_transform(self, name : str, transform : RenderTransform) -> None:
     pass
 
+  @abstractmethod
+  def close(self):
+    ...

@@ -15,8 +15,6 @@ from tinysim.renderer.web.web_http_handler import WebRequestHandler
 from tinysim.renderer.web.websocket_handler import WebSocketServer, WebSocketConnection
 
 
-
-
 @dataclass(frozen=True)
 class WebMesh:
   name : str
@@ -52,13 +50,12 @@ class WebVisual:
   material : str
   transform : RenderTransform
 
-@dataclass()
+@dataclass
 class WebObject:
   name : str
   parent : str
   transform : RenderTransform
   visuals : list[WebVisual] = field(default_factory=list)
-
   _dirty = False
 
 def convert_transform(transform : RenderTransform, type = None) -> RenderTransform: 
@@ -71,8 +68,12 @@ def convert_transform(transform : RenderTransform, type = None) -> RenderTransfo
   transform.quaternion[2] *= -1
   transform.quaternion = R.from_euler("xyz", transform.quaternion).as_quat()
   
+
   if type == RenderPrimitiveType.CUBE:
     transform.scale = transform.scale * 2
+  elif type == RenderPrimitiveType.CYLINDER:
+    transform.scale[2] *= 2
+    transform.scale = transform.scale[[0, 2, 0]]
 
   return transform
 
@@ -83,6 +84,7 @@ class WebRenderer(Renderer):
     WebRequestHandler.on_data = self.on_data_request
     self.web_server = ThreadingHTTPServer((host, port), WebRequestHandler)
     self.web_server_thread = Thread(target=self.web_server.serve_forever)
+    self.web_server_thread.daemon = True
     self.web_server_thread.start()
     
     self.ws_server = WebSocketServer(host, ws_port, self.on_client_connection)
@@ -102,8 +104,18 @@ class WebRenderer(Renderer):
     self.clients : list[WebSocketConnection] = list()
 
     self.loaded = False
+    self.last_update = 0
+
+  def close(self):
+    self.web_server.server_close()
+    self.web_server.shutdown()
+    self.web_server_thread.join()
 
   def update(self):
+
+    if time.time() - self.last_update < 1 / 30: return
+    self.last_update = time.time()
+
     updates = dict()
     self.loaded = True
     for obj in self.object_list:
@@ -135,7 +147,6 @@ class WebRenderer(Renderer):
     for mat in self.materials.values():
       client.send("LOAD_MATERIAL", mat)
 
-    print([obj.name for obj in self.object_list])
     for obj in self.object_list:
       client.send("CREATE_OBJECT", obj)
     
@@ -165,13 +176,18 @@ class WebRenderer(Renderer):
 
   def update_transform(self, name : str, transform : RenderTransform) -> None:
     transform = convert_transform(transform)
-    self.objects[name].transform.position = transform.position
-    self.objects[name].transform.quaternion = transform.quaternion
-    self.objects[name]._dirty = True
+
+    obj = self.objects[name]
+    
+    obj.transform.position = transform.position
+    obj.transform.quaternion = transform.quaternion
+    obj._dirty = True
+
+
 
 
   def attach_mesh(self, obj_name : str, mesh : str, material : str, transform : RenderTransform) -> None:
-    transform.quaternion = R.from_quat(transform.quaternion, scalar_first=True).as_quat()
+    transform.quaternion = transform.quaternion[[1, 2, 3, 0]]
 
     self.objects[obj_name].visuals.append(
       WebVisual(

@@ -19,19 +19,15 @@ connection.register_instruction("LOAD_MATERIAL", data =>  assets.load_material(d
 
 connection.register_instruction("RESET", data => scene.clear())
 
+function update_transforms(body, transform) {
+  body.position.set(...transform.position);
+  body.quaternion.set(...transform.quaternion);
+}
+
+
 connection.register_instruction("UPDATE_TRANSFORM", data => {
-  const position = new THREE.Vector3();
-  const quaternion = new THREE.Quaternion();
-
   for (const [name, transform] of Object.entries(data)) {
-
-    const body = bodies[name]
-    // console.log(body)
-
-    // body.position.set(...transform.position);
-    // body.quaternion.set(...transform.quaternion);
-    // body.scale.set(...transform.scale);
-
+    // update_transforms(bodies[name], transform)
   }
 });
 
@@ -40,9 +36,7 @@ connection.register_instruction("CREATE_OBJECT", body =>  {
   const bodyObj = new THREE.Group()
   bodyObj.name = body.name
 
-  
-  bodyObj.position.set(...body.transform.position)
-  bodyObj.quaternion.set(...body.transform.quaternion)
+  update_transforms(bodyObj, body.transform)
   bodies[bodyObj.name] = bodyObj
 
 
@@ -82,7 +76,6 @@ connection.register_instruction("CREATE_OBJECT", body =>  {
       })
     }
 
-
     visualObj.scale.set(...visual.transform.scale)
     visualObj.position.set(...visual.transform.position)
     visualObj.quaternion.set(...visual.transform.quaternion)
@@ -90,10 +83,10 @@ connection.register_instruction("CREATE_OBJECT", body =>  {
 
   })
 
-  console.log(body, bodies)
-
-  if (body.parent) bodies[body.parent].add(bodyObj)
-  else {
+  if (body.parent) {
+    bodies[body.parent].add(bodyObj)
+  } else {
+    console.log(bodyObj)
     scene.add_object(bodyObj)
     root = bodyObj
   } 

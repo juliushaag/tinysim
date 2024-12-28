@@ -10,5 +10,5 @@ def set_seed(seed):
   SEED = seed
   RANDOM_GEN = np.random.default_rng(seed)
 
-def get_seed(seed):
+def get_seed():
   return SEED
