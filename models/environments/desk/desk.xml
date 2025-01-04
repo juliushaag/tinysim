@@ -1,6 +1,6 @@
 <mujoco model="desk">
     <worldbody>
-        <body name="table_plane" pos="0.2 0 -0.02">
+        <body name="table_plane" pos="0 0 -0.02" euler="0 0 -90">
             <geom type="box" size="0.49 0.98 0.001" rgba="0.8 0.655 0.45 1" solimp="0.999 0.999 0.001"
                   solref="0.002 1"/>
 

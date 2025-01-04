@@ -68,28 +68,41 @@ class Environment(SceneElement):
       self.mount_points[mount_point] = robot
 
 
-    mp = self._bodies.get(mount_point)
-    robot._reload(mp.attach(robot._root, robot.name))
-    self._reload(SceneBody.from_spec(self._root.spec))
+    mp = {body.name : body for body in self.bodies}[mount_point]
+    mp.attach(robot._root, robot.name)
+
+    for body in robot.bodies:
+      body.name = f"{robot.name}{body.name}"
+
+    for joint in robot.joints:
+      joint.name = f"{robot.name}{joint.name}"
 
     self.robots.append(robot)
 
-  def _on_simulation_init(self):
+  def _on_simulation_init(self, sim):
     for robot in self.robots:
-      robot._on_simulation_init()
+      robot._on_simulation_init(sim)
 
-  def _reset_from_model(self, model):
-    self._reload(SceneBody.from_model(model))
-
+  def step(self):
     for robot in self.robots:
-        robot._reload(self._bodies.get(robot.root.name))
+      robot.step()
+      
 
-  def _compile(self):
-    mj_model = self.env_spec.compile()
+  def compile(self):
+    model = self._spec.compile()
     self.compiled = True
     self.id: str = md5(self.env_spec.to_xml().encode()).hexdigest()
-    self._reset_from_model(mj_model)
-    return mj_model
+
+    for body in self.bodies:
+      model_body = model.body(body.name)
+      body.id = model_body.id
+      body.position_rel = model_body.pos
+      body.quaternion_rel = model_body.quat
+
+    for joint in self.joints:
+      joint.id = model.jnt(joint.name).id
+
+    return model
     
   def get_body_by_name(self, name : str) -> SceneBody:
     return self.name_to_body[name]

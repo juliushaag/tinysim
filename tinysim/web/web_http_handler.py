@@ -1,6 +1,7 @@
 from pathlib import Path
+from threading import Thread
 from urllib.parse import urlparse
-from http.server import BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 WEB_PATH = Path(__file__).parent.resolve()
@@ -68,3 +69,15 @@ class WebRequestHandler(BaseHTTPRequestHandler):
       data = self.on_data(content)
       if data is None: return None
       return data, 'blob/bin'
+
+
+WEB_SERVER = None
+WEB_SERVER_THREAD = None
+def start_web_server(host, port): 
+  # mostly implemented for usage in jupyter notebooks
+  if WEB_SERVER is not None: return
+  global WEB_SERVER
+  WEB_SERVER = ThreadingHTTPServer((host, port), WebRequestHandler)
+  WEB_SERVER_THREAD = Thread(target=WEB_SERVER.serve_forever)
+  WEB_SERVER_THREAD.start()
+  

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from hashlib import md5
 from http.server import ThreadingHTTPServer
 from io import BytesIO
+import math
 from threading import Thread
 import time
 from typing import Optional
@@ -10,9 +11,11 @@ import numpy as np
 
 from scipy.spatial.transform import Rotation as R
 
-from tinysim.renderer import RenderPrimitiveType, Renderer, RenderTransform
-from tinysim.renderer.web.web_http_handler import WebRequestHandler
-from tinysim.renderer.web.websocket_handler import WebSocketServer, WebSocketConnection
+from tinysim.core.renderer import SimulationRenderer
+from tinysim.core.renderer import RenderPrimitiveType, RenderTransform, SimulationRenderer
+from tinysim.scene.scene import SceneMaterial, SceneMesh, SceneTexture, SceneVisualType
+from tinysim.web.web_http_handler import WebRequestHandler, start_web_server
+from tinysim.web.websocket_handler import WebSocketServer, WebSocketConnection
 
 
 @dataclass(frozen=True)
@@ -77,16 +80,13 @@ def convert_transform(transform : RenderTransform, type = None) -> RenderTransfo
 
   return transform
 
-class WebRenderer(Renderer):
+class WebRenderer(SimulationRenderer):
 
   def __init__(self, host="127.0.0.1", port=5000, ws_port=5001):
     
     WebRequestHandler.on_data = self.on_data_request
-    self.web_server = ThreadingHTTPServer((host, port), WebRequestHandler)
-    self.web_server_thread = Thread(target=self.web_server.serve_forever)
-    self.web_server_thread.daemon = True
-    self.web_server_thread.start()
-    
+    start_web_server(host, port)
+
     self.ws_server = WebSocketServer(host, ws_port, self.on_client_connection)
     self.ws_server_thread = Thread(target=self.ws_server.loop)
     self.ws_server_thread.start()
@@ -106,11 +106,57 @@ class WebRenderer(Renderer):
     self.loaded = False
     self.last_update = 0
 
-  def close(self):
-    self.web_server.server_close()
-    self.web_server.shutdown()
-    self.web_server_thread.join()
 
+  def init_scene(self, sim):
+    self.renderer = WebRenderer(self.host, self.port, self.ws_port)
+    self.tracked_objs = list()
+
+    self.meshes = SceneMesh.from_model(sim.model)
+    self.textures = SceneTexture.from_model(sim.model)
+    self.materials = SceneMaterial.from_model(sim.model)
+
+    
+    for mesh in self.meshes:
+      self.renderer.create_mesh(mesh.name, mesh.vertices, mesh.indices, mesh.normals, mesh.uvs)
+    
+    for mesh in self.materials:
+      self.renderer.create_material(mesh.name, mesh.color, mesh.emission, mesh.specular, mesh.shininess, mesh.reflectance, mesh.texture)
+
+    for mesh in self.textures:
+      self.renderer.create_texture(mesh.name, mesh.data, mesh.width, mesh.height)
+
+    objs = [(None, sim.env.root)]
+    while len(objs) > 0:
+      parent_name, obj = objs.pop(0)
+
+
+      if (obj.movable):
+        self.tracked_objs.append(obj)
+
+      self.renderer.create_object(obj.name, RenderTransform(obj.position, obj.quaternion), parent_name)
+
+      # All meshes are z-up we need y-up, but still right hand coord system ...
+      visuals  = self.renderer.create_object(None, RenderTransform(quaternion=R.from_euler("x", -math.pi / 2).as_quat(scalar_first=True)), obj.name)
+
+      for visual in obj.visuals:
+        if visual.group.item() in self.visualize_groups: continue
+        if visual.type == SceneVisualType.MESH:
+          self.renderer.attach_mesh(
+            obj_name=visuals,
+            mesh=visual.mesh, 
+            material=visual.material or self.renderer.create_material(None, visual.color), 
+            transform=RenderTransform(visual.position, visual.quaternion)
+          )
+        else:
+          self.renderer.attach_primitive(
+            obj_name=obj.name, 
+            type=visual.type, 
+            material=visual.material or self.renderer.create_material(None, visual.color),
+            transform=RenderTransform(visual.position, visual.quaternion, visual.scale), 
+          )
+
+      objs.extend((obj.name, child) for child in obj.children)
+      
   def update(self):
 
     if time.time() - self.last_update < 1 / 30: return
@@ -282,4 +328,4 @@ class WebRenderer(Renderer):
     self.assets[mesh.hash] = bytes_data
     return name
   
-Renderer.register_backend("web", WebRenderer)
+SimulationRenderer.register_backend(WebRenderer)

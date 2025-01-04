@@ -168,7 +168,7 @@ class SceneVisual:
     def from_spec(cls, spec):
       return cls(
         name=spec.name,
-        id=spec.id,
+        id=None,
         type=SceneVisualType.from_mj(spec.type),
         color=spec.rgba,
         group=spec.group,
@@ -210,7 +210,7 @@ class SceneJoint:
   def from_spec(cls, spec):
     return cls(
       name=spec.name,
-      id =spec.id,
+      id =None,
       type=SceneJointType.from_mj(spec.type),
       pos=spec.pos,
       axis=spec.axis,
@@ -240,6 +240,8 @@ class SceneBody:
   movable: bool = False
   position: List[float] = field(default_factory=lambda: np.zeros(3))
   quaternion: List[float] = field(default_factory=lambda: np.array([1, 0, 0, 0]))
+  position_rel : List[float] = field(default_factory=lambda: np.zeros(3))
+  quaternion_rel : List[float] = field(default_factory=lambda: np.array([1, 0, 0, 0]))
   visuals: List[SceneVisual] = field(default_factory=lambda: list())
   joints : List[SceneJoint] = field(default_factory=lambda: list())
   children: List["SceneBody"] = field(default_factory=lambda: list())
@@ -247,16 +249,16 @@ class SceneBody:
 
   @classmethod
   def from_spec(cls, spec):
-      return cls(
+    return cls(
       name=spec.name,
-      position=spec.pos, 
-      quaternion=spec.quat,
+      position_rel=spec.pos, 
+      quaternion_rel=spec.quat,
       movable = len(spec.joints) > 0,
-      id=spec.id,
+      id=None,
       spec=spec,
       visuals = [SceneVisual.from_spec(geom) for geom in spec.geoms],
       children = [SceneBody.from_spec(child) for child in spec.bodies],
-      joints = [SceneJoint.from_spec(joint) for joint in spec.joints]
+      joints = [SceneJoint.from_spec(joint) for joint in spec.joints],
     )
   
   @classmethod
@@ -267,8 +269,8 @@ class SceneBody:
       
       bod = cls(
         name=body.name,
-        position=body.pos, 
-        quaternion=body.quat,
+        position_rel=body.pos, 
+        quaternion_rel=body.quat,
         movable = len(body.jntnum) > 0,
         id = body_id
       )
@@ -289,9 +291,8 @@ class SceneBody:
   
   def attach(self, body : "SceneBody", namespace : str) -> "SceneBody":
     frame = self.spec.add_frame()
-    new_spec = frame.attach_body(body.spec, namespace, '')
-    return SceneBody.from_spec(new_spec)
-  
+    frame.attach_body(body.spec, namespace, '')
+    self.children.append(body)
 
   def get_all_bodies(self) -> List["SceneBody"]:
     bodies = [self]
@@ -300,9 +301,10 @@ class SceneBody:
     return bodies
   
   def get_all_joints(self) -> List[SceneJoint]:
-    joints = self.joints
-    for child in self.children:
-      joints.extend(child.get_all_joints())
+    joints = list()
+    for child in self.get_all_bodies():
+      joints.extend(child.joints)
+    print(len(self.get_all_bodies()))
     return joints
 
   def __repr__(self):
@@ -315,12 +317,9 @@ class SceneElement:
     self._position = np.zeros(3)
     self._quaternion = np.zeros(4)
     self._spec = spec
-    self._bodies = dict()
-    self._joints = dict()
-    self._visuals = dict()
 
-    self._reload(SceneBody.from_spec(spec.worldbody))
-
+    self._root = SceneBody.from_spec(spec.worldbody)
+  
   @property
   def name(self):
     return self._name
@@ -331,23 +330,12 @@ class SceneElement:
   
   @property
   def bodies(self):
-    return list(self._bodies.values())
+    return self._root.get_all_bodies()
   
   @property
   def joints(self):
-    return list(self._joints.values())
+    return self._root.get_all_joints()
   
-  def get_body_by_name(self, name : str) -> SceneBody:
-    return self._bodies[name]
-  
-  def get_joint_by_name(self, name : str) -> SceneBody:
-    return self._joints[name]
-  
-  def _on_simulation_init(self):
+
+  def _on_simulation_init(self, sim):
     pass
-  
-  def _reload(self, root : SceneBody):
-    self._root = root
-    self._bodies = { body.name : body for body in root.get_all_bodies() }
-    self._joints = { joint.name : joint for joint in root.get_all_joints() }
-    self._visuals = { visual.name : visual for visual in root.visuals }

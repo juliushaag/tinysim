@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 import mujoco as mj
+import numpy as np
 import yaml
 
 from tinysim.scene.scene import SceneElement
@@ -44,20 +45,39 @@ class Robot(SceneElement):
     self._conf = conf    
     self._ctrl = None
 
+    self.ee = self.bodies[-1]
+    self.base = self.bodies[0]
+
   def get_body_by_name(self, name):
     if name not in self._bodies:
       name = f"{self.name}{name}" # prepend namespace
     return super().get_body_by_name(name)
   
-  def _on_simulation_init(self):
-    self.joint_act_ind = [joint.id for joint in self.joints]
+  def _on_simulation_init(self, sim):
+    model = sim.model
+    jnt_ids = set(joint.id for joint in self.joints)
+    print(jnt_ids)
 
-  def get_ctrl(self, reset = False):
-    ctrl = self._ctrl
-    self._ctrl = None if reset else ctrl
-    return ctrl
-  
-  def set_ctrl(self, ctrl):
-    assert len(ctrl) == len(self.joints), "Control vector must have the same length as the number of joints"
-    self._ctrl = ctrl
+    self.acts_idx = [model.actuator(i).id for i in range(model.nu) if model.actuator(i).trnid[0] in jnt_ids]
+    self._ctrl = np.zeros(len(self.acts_idx))
+
+    self.sim = sim
+
+  def step(self):
+    self.sim.data.ctrl[self.acts_idx] = self._ctrl
     
+  @property
+  def ctrl(self):
+    return self._ctrl.copy()
+  
+  @ctrl.setter
+  def ctrl(self, ctrl : np.ndarray):
+    assert len(ctrl) == len(self._ctrl), "Control vector must have the same length as the number of joints"
+    self._ctrl[:] = ctrl
+
+  def get_ee_pose(self):
+    return self.ee.position, self.ee.quaternion
+  
+  def get_base_pos(self):
+    return self.base.position, self.base.quaternion
+  

@@ -1,7 +1,6 @@
 <mujoco model="iiwa14">
   <compiler angle="radian" meshdir="assets" autolimits="true"/>
 
-
   <statistic center="0.2 0 0.2" extent="1.0"/>
 
   <default>

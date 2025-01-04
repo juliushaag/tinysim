@@ -1,33 +1,22 @@
-import math
-import time
-
-import numpy as np
 import tinysim as ts
 
-
-robot = ts.load_robot("panda")
-env = ts.load_environment("desk")
+robot = ts.load_robot("kuka")
+env = ts.load_environment("plane")
 
 env.attach(robot)
 
 
-sim = ts.simulate(env, render_args=dict(host="192.168.0.28"))
+sim = ts.simulate(env)
 
-sim.load_environment(env)
+# start_pos = sim.model.key(0).ctrl
 
-start = time.monotonic()
-sections = 1000 * 10 # 100s
-interval = sections / len(sim.model.key(0).ctrl)
+# robot.ctrl = start_pos
 
-start_pos = sim.model.key(0).ctrl
+def interpolate(start, end, t):
+  return start + (end - start) * t
 
 
-while True:
-  # sim.data.ctrl[:] = start_pos
+
+while sim.is_running():
   sim.step()
-  # t = (time.monotonic() - start) % sections
-
-  # idx = int(t / interval)
-
-  # if t > 10: exit()
-  # start_pos[idx] = math.sin((t / interval) * math.pi * 2) * 0.1
+  print(robot.get_ee_pose())
