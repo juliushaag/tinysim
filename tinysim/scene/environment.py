@@ -5,7 +5,7 @@ from typing import Optional, Union
 import mujoco as mj
 import yaml
 from tinysim.scene.robot import Robot
-from tinysim.scene.scene import SceneBody, SceneElement
+from tinysim.scene.element import SceneBody, Element
 
 
 ENVIRONMENTS_PATH = (Path(__file__).parent / "../../models/environments").resolve()
@@ -39,7 +39,7 @@ def load_xml(xml : str) -> "Environment":
   return Environment.from_xml(xml)
 
 
-class Environment(SceneElement):
+class Environment(Element):
   
   
   def __init__(self, name : str, spec, conf : EnvironmentConfig) -> None:
@@ -68,41 +68,8 @@ class Environment(SceneElement):
       self.mount_points[mount_point] = robot
 
 
-    mp = {body.name : body for body in self.bodies}[mount_point]
-    mp.attach(robot._root, robot.name)
-
-    for body in robot.bodies:
-      body.name = f"{robot.name}{body.name}"
-
-    for joint in robot.joints:
-      joint.name = f"{robot.name}{joint.name}"
-
     self.robots.append(robot)
 
-  def _on_simulation_init(self, sim):
-    for robot in self.robots:
-      robot._on_simulation_init(sim)
+    mp = { body.name : body for body in self.bodies }[mount_point]
 
-  def step(self):
-    for robot in self.robots:
-      robot.step()
-      
-
-  def compile(self):
-    model = self._spec.compile()
-    self.compiled = True
-    self.id: str = md5(self.env_spec.to_xml().encode()).hexdigest()
-
-    for body in self.bodies:
-      model_body = model.body(body.name)
-      body.id = model_body.id
-      body.position_rel = model_body.pos
-      body.quaternion_rel = model_body.quat
-
-    for joint in self.joints:
-      joint.id = model.jnt(joint.name).id
-
-    return model
-    
-  def get_body_by_name(self, name : str) -> SceneBody:
-    return self.name_to_body[name]
+    super().attach(robot, mp)

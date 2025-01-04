@@ -1,6 +1,6 @@
 import tinysim as ts
 
-robot = ts.load_robot("kuka")
+robot = ts.load_robot("panda")
 env = ts.load_environment("plane")
 
 env.attach(robot)
@@ -8,9 +8,9 @@ env.attach(robot)
 
 sim = ts.simulate(env)
 
-# start_pos = sim.model.key(0).ctrl
+start_pos = sim.model.key(0).ctrl
 
-# robot.ctrl = start_pos
+robot.ctrl = start_pos
 
 def interpolate(start, end, t):
   return start + (end - start) * t

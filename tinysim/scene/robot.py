@@ -5,7 +5,7 @@ import mujoco as mj
 import numpy as np
 import yaml
 
-from tinysim.scene.scene import SceneElement
+from tinysim.scene.element import Element
 
 ROBOTS_PATH = Path(__file__).parent / "../../models/robots" 
 ROBOTS = { path.name : path for path in ROBOTS_PATH.iterdir() }
@@ -31,40 +31,42 @@ def load_robot(name : str) -> "Robot":
   robot_config = RobotConfig(**yaml.full_load(conf.read_text()))
   robot_config.definition = str(ROBOTS[name] / robot_config.definition)
 
-  robot_name = f"{name}:{ROBOTS[name]}"
+  kind = name
+  name = f"{name}:{Robot.ROBOTS[name]}"
   Robot.ROBOTS[name] += 1
 
-  return Robot(name, robot_config)
+  return Robot(name, kind, robot_config)
 
-class Robot(SceneElement):
+class Robot(Element):
+
   ROBOTS = defaultdict(int)
 
-  def __init__(self, name : str, conf : RobotConfig) -> None:
+  def __init__(self, name : str, kind, conf : RobotConfig) -> None:
+    
     spec = mj.MjSpec.from_file(conf.definition)
     super().__init__(name, spec)
+
     self._conf = conf    
     self._ctrl = None
 
+    self.kind = kind
+
     self.ee = self.bodies[-1]
     self.base = self.bodies[0]
-
-  def get_body_by_name(self, name):
-    if name not in self._bodies:
-      name = f"{self.name}{name}" # prepend namespace
-    return super().get_body_by_name(name)
   
   def _on_simulation_init(self, sim):
     model = sim.model
-    jnt_ids = set(joint.id for joint in self.joints)
-    print(jnt_ids)
 
+    jnt_ids = set(joint.id for joint in self.joints)
     self.acts_idx = [model.actuator(i).id for i in range(model.nu) if model.actuator(i).trnid[0] in jnt_ids]
     self._ctrl = np.zeros(len(self.acts_idx))
 
     self.sim = sim
+    super()._on_simulation_init(sim)
 
   def step(self):
     self.sim.data.ctrl[self.acts_idx] = self._ctrl
+    super().step()
     
   @property
   def ctrl(self):

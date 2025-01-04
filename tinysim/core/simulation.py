@@ -14,12 +14,11 @@ def simulate(env : Environment, **kwargs):
 
 class Simulation:
 
-  def __init__(self, env : Environment = None, renderer = "mjviewer", visualize_groups = set(range(10)), render_args = {}):
+  def __init__(self, env : Environment = None, renderer = "mjviewer", visualize_groups = set(range(3)), render_args = {}):
 
     self.model = None
     self.visualize_groups = visualize_groups   
     self.renderer : Renderer = Renderer.create(renderer, **render_args)
-
 
     if env is not None:
       self.load_environment(env)
@@ -69,7 +68,8 @@ class Simulation:
       obj.quaternion = body_quat = self.data.xquat[obj.id]
 
       parent_pos = self.data.xpos[parent_id]
-      # Get parent's rotation matrix
+
+      # Get inv of parent's rotation matrix
       parent_rot = R.from_matrix(self.data.xmat[parent_id].reshape(3, 3)).inv()
       
       # Calculate relative position in parent's frame
@@ -79,6 +79,6 @@ class Simulation:
       obj.quaternion_rel = (parent_rot * R.from_quat(body_quat, scalar_first=True)).as_quat(scalar_first=True)
     
     for joint in self.joints:
-      joint.qpos = self.data.qpos[joint.id]
-      joint.qvel = self.data.qvel[joint.id]
+      joint.qpos = self.data.qpos[self.model.jnt(joint.id).qposadr]
+      joint.qvel = self.data.qvel[self.model.jnt(joint.id).qposadr]
     

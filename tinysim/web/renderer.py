@@ -13,7 +13,7 @@ from scipy.spatial.transform import Rotation as R
 
 from tinysim.core.renderer import SimulationRenderer
 from tinysim.core.renderer import RenderPrimitiveType, RenderTransform, SimulationRenderer
-from tinysim.scene.scene import SceneMaterial, SceneMesh, SceneTexture, SceneVisualType
+from tinysim.scene.element import SceneMaterial, SceneMesh, SceneTexture, SceneVisualType
 from tinysim.web.web_http_handler import WebRequestHandler, start_web_server
 from tinysim.web.websocket_handler import WebSocketServer, WebSocketConnection
 
