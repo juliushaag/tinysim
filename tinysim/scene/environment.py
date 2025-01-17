@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, Union
 import mujoco as mj
 import yaml
-from tinysim.scene.robot import Robot
+from tinysim.robots.robot import Robot
 from tinysim.scene.element import SceneBody, Element
 
 

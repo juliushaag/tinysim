@@ -9,5 +9,5 @@ setup(
   author='Julius Haag',
   author_email='haag.julius@outlook.de',
   packages=find_packages(),
-  requires=['mujoco', "trimesh", "pyyaml", "websockets"]
+  requires=['mujoco>=3.2', "trimesh", "pyyaml", "websockets"]
 )

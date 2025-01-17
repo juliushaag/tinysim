@@ -3,32 +3,35 @@ import math
 import mujoco as mj
 import numpy as np
 
+from tinysim.scene.element import Element
 from tinysim.scene.environment import Environment
 from scipy.spatial.transform import Rotation as R
 
 from tinysim.core.renderer import SimulationRenderer as Renderer
+from tinysim.simulation.actuator import Actuator
 
 
-def simulate(env : Environment, **kwargs):
-  return Simulation(env=env, **kwargs)
+def simulate(env : Element, **kwargs):
+  return Simulation(scene=env, **kwargs)
 
 class Simulation:
 
-  def __init__(self, env : Environment = None, renderer = "mjviewer", visualize_groups = set(range(3)), render_args = {}):
+  def __init__(self, scene : Element = None, renderer = "mjviewer", visualize_groups = set(range(3)), render_args = {}):
 
     self.model = None
     self.visualize_groups = visualize_groups   
     self.renderer : Renderer = Renderer.create(renderer, **render_args)
 
-    if env is not None:
-      self.load_environment(env)
+    if scene is not None:
+      self.load_environment(scene)
 
-  def load_environment(self, env : Environment):
+
+  def load_environment(self, scene : Element):
   
-    self.model = env.compile()
-    self.env = env
-    self.joints = env.joints
-    self.objects = env.bodies
+    self.model = scene.compile()
+    self.env = scene
+    self.joints = scene.joints
+    self.objects = scene.bodies
 
 
     self.data = mj.MjData(self.model)

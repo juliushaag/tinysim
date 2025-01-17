@@ -1,14 +1,8 @@
 
 from dataclasses import dataclass
 from hashlib import md5
-from typing import Optional, Union
 
 import numpy as np
-import mujoco as mj
-
-from dataclasses import dataclass, field
-from typing import Optional, Tuple, List
-from enum import Enum
 
 from tinysim.simulation.body import SceneBody
 
@@ -40,11 +34,9 @@ class Element:
   def joints(self):
     return self._root.get_all_joints()
   
-  @property
   def body(self, ident : int | str) -> SceneBody:
     return next(body for body in self.bodies if body.name == ident or body.id == ident or body.name == f"{self.name}{ident}")
   
-  @property
   def joint(self, ident : int | str) -> SceneBody:
     return next(joint for joint in self.joints if joint.name == ident or joint.id == ident or joint.name == f"{self.name}{ident}")
 
@@ -53,9 +45,11 @@ class Element:
     assert mount_point in self.bodies
     mount_point.attach(element._root, element.name)
 
+    # body names are unique, so we need to rename them (2 pandas in one scene etc)
     for body in element.bodies:
       body.name = f"{element.name}{body.name}"
 
+    # same with joints
     for joint in element.joints:
       joint.name = f"{element.name}{joint.name}"
 
@@ -66,6 +60,7 @@ class Element:
     model = self._spec.compile() 
     self.compiled = True
     self.id: str = md5(self.env_spec.to_xml().encode()).hexdigest()
+
 
     for body in self.bodies:
       model_body = model.body(body.name)

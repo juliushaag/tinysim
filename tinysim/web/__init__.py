@@ -1,1 +1,0 @@
-from tinysim.web.renderer import WebRenderer
