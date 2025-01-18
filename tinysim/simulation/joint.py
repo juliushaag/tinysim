@@ -4,8 +4,11 @@ from typing import Tuple
 
 import numpy as np
 import mujoco as mj
+import torch
 
-class SceneJointType(str, Enum):
+from tinysim.core.transform import Position, Rotation
+
+class JointType(str, Enum):
   FREE = "FREE",
   BALL = "BALL",
   SLIDE = "SLIDE",
@@ -14,33 +17,72 @@ class SceneJointType(str, Enum):
   @staticmethod
   def from_mj(mj_type):
     return {
-      mj.mjtJoint.mjJNT_FREE: SceneJointType.FREE,
-      mj.mjtJoint.mjJNT_BALL: SceneJointType.BALL,
-      mj.mjtJoint.mjJNT_SLIDE: SceneJointType.SLIDE,
-      mj.mjtJoint.mjJNT_HINGE: SceneJointType.HINGE,
+      mj.mjtJoint.mjJNT_FREE: JointType.FREE,
+      mj.mjtJoint.mjJNT_BALL: JointType.BALL,
+      mj.mjtJoint.mjJNT_SLIDE: JointType.SLIDE,
+      mj.mjtJoint.mjJNT_HINGE: JointType.HINGE,
     } [mj_type]
   
 @dataclass
-class SceneJoint:
-  name : str
+class Joint:
   id : int
-  type : SceneJointType
-  pos : np.ndarray
+  name : str
+  qpos : np.ndarray
+  qvel : np.ndarray
+  twist : Rotation
+  translation : Position 
+
+
+  @classmethod
+  def from_spec(cls, spec):
+    jnt_type = JointType.from_mj(spec.type)
+
+    if jnt_type == JointType.HINGE:
+      return HingeJoint.from_spec(spec)
+    if jnt_type == JointType.SLIDE:
+      return SlideJoint.from_spec(spec)
+    
+    assert False
+
+  def __repr__(self):
+    return f"<{__name__} {self.name} type={self.type} qpos={self.qpos.item():.2f} qvel={self.qvel.item():2f}]>"
+
+@dataclass
+class SlideJoint(Joint):
   axis : np.ndarray
   range : Tuple[float, float]
-  qpos : np.ndarray = field(default_factory=lambda: np.zeros(1))
-  qvel : np.ndarray = field(default_factory=lambda: np.zeros(1))
+  type : JointType = JointType.SLIDE
 
   @classmethod
   def from_spec(cls, spec):
     return cls(
       name=spec.name,
-      id =None,
-      type=SceneJointType.from_mj(spec.type),
-      pos=spec.pos,
-      axis=spec.axis,
-      range=(spec.range[0], spec.range[1])
+      id=None,
+      type=JointType.from_mj(spec.type),
+      axis=Position(spec.axis.copy()),
+      range=(spec.range[0], spec.range[1]),
+      translation=Position(spec.pos.copy()),
+      twist=Rotation(),
+      qpos=np.zeros(1),
+      qvel=np.zeros(1)
     )
 
-  def __repr__(self):
-    return f"<SceneJoint {self.name} type={self.type} range=[{self.range[0].item()}:{self.range[1].item()}]>"
+@dataclass
+class HingeJoint(Joint):
+  axis : Position
+  range : Tuple[float, float]
+  type : JointType = JointType.HINGE
+
+  @classmethod
+  def from_spec(cls, spec):
+    return cls(
+      name=spec.name,
+      id=None,
+      type=JointType.from_mj(spec.type),
+      axis=Position(spec.axis.copy()),
+      range=(spec.range[0], spec.range[1]),
+      translation=Position(spec.pos.copy()),
+      twist=Rotation(),
+      qpos=np.zeros(1),
+      qvel=np.zeros(1)
+    )

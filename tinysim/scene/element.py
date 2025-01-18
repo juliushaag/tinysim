@@ -10,8 +10,6 @@ from tinysim.simulation.body import SceneBody
 class Element:
   def __init__(self, name : str, spec) -> None:
     self._name = name
-    self._position = np.zeros(3)
-    self._quaternion = np.zeros(4)
     self._spec = spec
 
     self._root = SceneBody.from_spec(spec.worldbody)
@@ -66,7 +64,7 @@ class Element:
       model_body = model.body(body.name)
       body.id = model_body.id
       body.position_rel = model_body.pos
-      body.quaternion_rel = model_body.quat
+      body.rotation_rel = model_body.quat
 
     for joint in self.joints:
       joint.id = model.jnt(joint.name).id

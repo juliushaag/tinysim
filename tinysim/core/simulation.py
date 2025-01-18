@@ -4,11 +4,9 @@ import mujoco as mj
 import numpy as np
 
 from tinysim.scene.element import Element
-from tinysim.scene.environment import Environment
-from scipy.spatial.transform import Rotation as R
+from tinysim.core.transform import Position, Rotation
 
 from tinysim.core.renderer import SimulationRenderer as Renderer
-from tinysim.simulation.actuator import Actuator
 
 
 def simulate(env : Element, **kwargs):
@@ -63,25 +61,14 @@ class Simulation:
     return self.renderer.is_running()
 
   def _scene_update(self):
+
+    # update sim bodies pose
     for obj in self.objects:
-      parent_id = self.model.body_parentid[obj.id]
+      obj.xpos = Position(self.data.xpos[obj.id].copy())
+      obj.xrot = Rotation(self.data.xquat[obj.id][[1, 2, 3, 0]].copy())
 
-      # Get world positions
-      obj.position = body_pos = self.data.xpos[obj.id]
-      obj.quaternion = body_quat = self.data.xquat[obj.id]
-
-      parent_pos = self.data.xpos[parent_id]
-
-      # Get inv of parent's rotation matrix
-      parent_rot = R.from_matrix(self.data.xmat[parent_id].reshape(3, 3)).inv()
-      
-      # Calculate relative position in parent's frame
-      rel_pos = body_pos - parent_pos
-
-      obj.position_rel = parent_rot.apply(rel_pos)
-      obj.quaternion_rel = (parent_rot * R.from_quat(body_quat, scalar_first=True)).as_quat(scalar_first=True)
-    
     for joint in self.joints:
-      joint.qpos = self.data.qpos[self.model.jnt(joint.id).qposadr]
-      joint.qvel = self.data.qvel[self.model.jnt(joint.id).qposadr]
+      joint.qpos = self.data.qpos[self.model.jnt(joint.id).qposadr].copy()
+      joint.qvel = self.data.qvel[self.model.jnt(joint.id).qposadr].copy()
     
+    time.sleep(0.1)

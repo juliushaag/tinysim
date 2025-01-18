@@ -22,8 +22,8 @@ class PandaRobot(Robot):
     self._acts_idx = [model.actuator(self.name + "actuator" + str(i)).id for i in range(1, 9)]
     self._ctrl = np.zeros(len(self._acts_idx))
 
-    self.ee_body : SceneBody = self.body("hand")
-    self.base_body : SceneBody = self.body("link0")
+    self._ee_body : SceneBody = self.body("hand")
+    self._base_body : SceneBody = self.body("link0")
 
     self._ctrl[:] = model.key(self.name+"home").ctrl
 
@@ -41,9 +41,11 @@ class PandaRobot(Robot):
   @ctrl.setter
   def ctrl(self, ctrl : np.ndarray):
     self._ctrl = ctrl
+    
+  @property
+  def base(self) -> SceneBody:
+    return self._base_body
 
-  def get_ee_pose(self) -> tuple[np.ndarray, np.ndarray]:
-    return self.ee_body.position, self.ee_body.quaternion
-  
-  def get_base_pose(self):
-    return self.base_body.position, self.base_body.quaternion
+  @property
+  def end_effector(self) -> SceneBody:
+    return self._ee_body
