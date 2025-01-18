@@ -2,9 +2,10 @@ import time
 import math
 import mujoco as mj
 import numpy as np
+import torch
 
 from tinysim.scene.element import Element
-from tinysim.core.transform import Position, Rotation
+from tinysim.core.transform import Rotation
 
 from tinysim.core.renderer import SimulationRenderer as Renderer
 
@@ -64,11 +65,9 @@ class Simulation:
 
     # update sim bodies pose
     for obj in self.objects:
-      obj.xpos = Position(self.data.xpos[obj.id].copy())
+      obj.xpos = torch.from_numpy(self.data.xpos[obj.id].copy())
       obj.xrot = Rotation(self.data.xquat[obj.id][[1, 2, 3, 0]].copy())
 
     for joint in self.joints:
       joint.qpos = self.data.qpos[self.model.jnt(joint.id).qposadr].copy()
       joint.qvel = self.data.qvel[self.model.jnt(joint.id).qposadr].copy()
-    
-    time.sleep(0.1)

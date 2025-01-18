@@ -6,7 +6,7 @@ import numpy as np
 import mujoco as mj
 import torch
 
-from tinysim.core.transform import Position, Rotation
+from tinysim.core.transform import Rotation
 
 class JointType(str, Enum):
   FREE = "FREE",
@@ -30,7 +30,7 @@ class Joint:
   qpos : np.ndarray
   qvel : np.ndarray
   twist : Rotation
-  translation : Position 
+  translation : torch.Tensor 
 
 
   @classmethod
@@ -59,9 +59,9 @@ class SlideJoint(Joint):
       name=spec.name,
       id=None,
       type=JointType.from_mj(spec.type),
-      axis=Position(spec.axis.copy()),
+      axis=torch.from_numpy(spec.axis.copy()),
       range=(spec.range[0], spec.range[1]),
-      translation=Position(spec.pos.copy()),
+      translation=torch.from_numpy(spec.pos.copy()),
       twist=Rotation(),
       qpos=np.zeros(1),
       qvel=np.zeros(1)
@@ -69,7 +69,7 @@ class SlideJoint(Joint):
 
 @dataclass
 class HingeJoint(Joint):
-  axis : Position
+  axis : torch.Tensor
   range : Tuple[float, float]
   type : JointType = JointType.HINGE
 
@@ -79,9 +79,9 @@ class HingeJoint(Joint):
       name=spec.name,
       id=None,
       type=JointType.from_mj(spec.type),
-      axis=Position(spec.axis.copy()),
+      axis=torch.from_numpy(spec.axis.copy()),
       range=(spec.range[0], spec.range[1]),
-      translation=Position(spec.pos.copy()),
+      translation=torch.from_numpy(spec.pos.copy()),
       twist=Rotation(),
       qpos=np.zeros(1),
       qvel=np.zeros(1)

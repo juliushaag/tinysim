@@ -3,8 +3,9 @@ from dataclasses import dataclass, field
 from typing import List
 
 import numpy as np
+import torch
 
-from tinysim.core.transform import Rotation, Position
+from tinysim.core.transform import Rotation
 from tinysim.simulation.joint import Joint
 
 import mujoco as mj
@@ -15,10 +16,10 @@ class SceneBody:
   id : int = -1
   movable: bool = False
 
-  xpos: Position= field(default_factory=Position)
+  xpos: torch.Tensor = field(default_factory=lambda: torch.zeros(3))
   xrot: Rotation = field(default_factory=Rotation)
 
-  ipos : Position = field(default_factory=Position)
+  ipos : torch.Tensor = field(default_factory=lambda: torch.zeros(3))
   irot : Rotation  = field(default_factory=Rotation)
 
   joints : list[Joint] = field(default_factory=lambda: list())
@@ -29,10 +30,12 @@ class SceneBody:
 
   @classmethod
   def from_spec(cls, spec, parent = None):
+    print(spec.quat.copy()[[1, 2, 3, 0]])
     body =  cls(
       name=spec.name,
-      
-      ipos=Position(spec.pos.copy()), 
+
+
+      ipos=torch.from_numpy(spec.pos.copy()), 
       irot=Rotation(spec.quat.copy()[[1, 2, 3, 0]]),
 
       movable = len(spec.joints) > 0,

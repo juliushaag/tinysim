@@ -12,7 +12,3 @@ while sim.is_running():
   sim.step()
 
   position, rotation = robot.forward()
-
-  sim.get_renderer().render_point(f"test{0}", position)
-
-

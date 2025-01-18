@@ -7,8 +7,9 @@ import mujoco.viewer as mjv
 import numpy as np
 
 from scipy.spatial.transform import Rotation as R
+import torch
 
-from tinysim.core.transform import Position, Rotation
+from tinysim.core.transform import Rotation
 
 class SimulationRenderer():
 
@@ -60,18 +61,18 @@ class MjRenderer(SimulationRenderer):
   def is_running(self):
     return self.viewer.is_running()
   
-  def render_point(self, name : str,  pos : Position, color=np.array([1, 0, 0, 1]), size=np.array([0.2, 0.0, 0.0])):
+  def render_point(self, name : str,  pos : torch.Tensor, color=torch.tensor([1, 0, 0, 1]), size=torch.tensor([0.02, 0.0, 0.0])):
     if name in self.debug_names:
-      self.viewer.user_scn.geoms[self.debug_names[name]].pos = pos._data.numpy()
+      self.viewer.user_scn.geoms[self.debug_names[name]].pos = pos.numpy()
       return
     
     mujoco.mjv_initGeom(
         self.viewer.user_scn.geoms[self.custom_object_count],
         type=mujoco.mjtGeom.mjGEOM_SPHERE,
-        size=size,
-        pos=pos._data.numpy(),
+        size=size.numpy(),
+        pos=pos.numpy(),
         mat=np.eye(3).flatten(),
-        rgba=color
+        rgba=color.numpy()
     )
 
     self.debug_names[name] = self.custom_object_count

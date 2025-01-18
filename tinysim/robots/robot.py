@@ -93,8 +93,6 @@ class Robot(Element, ABC):
     rotation = self.base.xrot
 
     qpos = torch.from_numpy(qpos).requires_grad_(True)
-    print(qpos)
-
 
     qpos_i = 0
     for body in self.chain:
@@ -102,11 +100,10 @@ class Robot(Element, ABC):
       position += rotation.rotate(body.ipos)
       rotation *= body.irot
 
-      # assert np.allclose(body.xpos.numpy(), position.numpy()), f"{body.name} {body.xpos.numpy()} != {position.numpy()} {body.irot}"
         
       for joint in body.joints:
-        # position += rotation.rotate(joint.translation)
-        # rotation *= joint.twist
+        position += rotation.rotate(joint.translation)
+        rotation *= joint.twist
 
         half_angle = qpos[qpos_i] / 2
 
@@ -115,7 +112,17 @@ class Robot(Element, ABC):
         qpos_i += 1
 
 
-    return position + rotation.rotate(self.end_effector.ipos), rotation * self.end_effector.irot
+    position += rotation.rotate(self.end_effector.ipos)
+    rotation *= self.end_effector.irot
+
+    if jacobian is not None:
+      for i in range(3):
+        jacobian[i] = torch.autograd.grad(position[i], qpos, create_graph=True)[i]
+
+      for i in range(3, 7):
+        jacobian[i] = torch.autograd.grad(rotation.as_quat()[i - 3], qpos, create_graph=True)[i - 3]
+
+    return position, rotation
 
   def pose2qpos(self, position : np.ndarray, step_length = 0.1) -> np.ndarray:
 
