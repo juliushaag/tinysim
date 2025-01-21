@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Tuple
 import mujoco as mj
 import numpy as np
 
@@ -13,6 +14,8 @@ import inspect
 from tinysim.core.transform import Rotation
 
 import torch
+import matplotlib.pyplot as plt
+from torchviz import make_dot
 
 ROBOTS_PATH = Path(__file__).parent
 ROBOTS = { path.name : path / "robot.py" for path in ROBOTS_PATH.iterdir() if path.is_dir() and (path /  (path.name + ".py")).is_file()}
@@ -82,57 +85,69 @@ class Robot(Element, ABC):
   def chain(self) -> list[SceneBody]:
     return list(self._base_to_end_effector)
 
-  def forward(self, qpos : np.ndarray = None, jacobian : np.ndarray = None) -> np.ndarray:
+  def forward_kinematic(self, qpos : torch.tensor = None, jacobian : np.ndarray = None) -> Tuple[torch.Tensor, Rotation]:
 
-    if qpos is None: qpos = np.array([joint.qpos for joint in self.joints])
+    if qpos is None: qpos = torch.tensor([joint.qpos.item() for joint in self.joints])
 
     assert len(qpos) == len(self.joints)
-    assert jacobian is None or jacobian.shape == (7, len(self.joints))
+    assert jacobian is None or jacobian.shape == (6, len(self.joints))
 
     position = self.base.xpos
     rotation = self.base.xrot
 
-    qpos = torch.from_numpy(qpos).requires_grad_(True)
+    qpos : torch.Tensor = qpos.clone().requires_grad_()
 
     qpos_i = 0
     for body in self.chain:
 
-      position += rotation.rotate(body.ipos)
-      rotation *= body.irot
+      position = position + rotation.rotate(body.ipos)
+      rotation = rotation * body.irot
+
+   
 
         
       for joint in body.joints:
-        position += rotation.rotate(joint.translation)
-        rotation *= joint.twist
+        position = position + rotation.rotate(joint.translation)
+        rotation = rotation *  joint.twist
 
         half_angle = qpos[qpos_i] / 2
+        quat = torch.cat([half_angle.sin() * joint.axis, half_angle.cos().unsqueeze(0)])
+        rotation = rotation * Rotation(quat)
 
-        x, y, z = joint.axis * torch.sin(half_angle)
-        rotation *= Rotation(torch.tensor([x, y, z, torch.cos(half_angle)]))
         qpos_i += 1
 
 
-    position += rotation.rotate(self.end_effector.ipos)
-    rotation *= self.end_effector.irot
+    position = position + rotation.rotate(self.end_effector.ipos)
+    rotation = rotation * self.end_effector.irot
+
+    euler = rotation.to_euler()
 
     if jacobian is not None:
       for i in range(3):
-        jacobian[i] = torch.autograd.grad(position[i], qpos, create_graph=True)[i]
+        grad  = torch.autograd.grad(position[i], [qpos], create_graph=True)[0]
+        jacobian[i] = grad
 
-      for i in range(3, 7):
-        jacobian[i] = torch.autograd.grad(rotation.as_quat()[i - 3], qpos, create_graph=True)[i - 3]
+      for i in range(3):
+        grad = torch.autograd.grad(euler[i], [qpos], create_graph=True)[0]
+        jacobian[i + 3] = grad
 
     return position, rotation
 
-  def pose2qpos(self, position : np.ndarray, step_length = 0.1) -> np.ndarray:
+  def inverse_kinematic(self, position : list, step_length = 0.01) -> torch.Tensor:
 
-    # qpos = np.array([joint.qpos for joint in self.joints])
+    qpos = torch.tensor([joint.qpos.item() for joint in self.joints])
+    
+    position = torch.tensor(position, dtype=torch.float64) 
 
-    # for i in range(1000):
-    #   pos, rot = self.qpos2pose(qpos)
-    #   while not np.allclose(pos, position, atol=1e-3):
-    #     qpos -= step_length * 2 *  (position - self.qpos2pose(qpos)[0])
+    jacobian = torch.zeros((6, len(self.joints)), dtype=torch.float64)
 
+    pos, rot = self.forward_kinematic(qpos=qpos, jacobian=jacobian)
+    while not np.allclose(pos.detach().numpy(), position, atol=1e-5):
 
-    # return qpos
-    ...
+      loss = (pos - position)
+      qpos = qpos - step_length * 2 * (jacobian[:3].T @ loss)
+      
+      pos, rot = self.forward_kinematic(qpos=qpos, jacobian=jacobian)
+ 
+    return qpos.detach()
+    

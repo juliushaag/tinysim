@@ -14,6 +14,10 @@ def test_transform():
 
     assert np.allclose(quat1.inv().as_quat(), Rotation(quat1.inv().as_quat()).as_quat())
 
+
+    assert np.allclose(quat1.as_euler("xyz"), Rotation(quat1.as_quat()).to_euler())
+
+
     pos = torch.rand(3) * 100
     pos1 = torch.rand(3) * 100
 

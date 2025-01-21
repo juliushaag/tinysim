@@ -9,7 +9,8 @@ class   Rotation:
   def __init__(self, rotation : Union[np.ndarray, torch.Tensor] = None):
     
     if rotation is None:
-      rotation = torch.tensor([0.0, 0.0, 0.0, 1.0])
+      rotation = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=torch.float64)
+
     if isinstance(rotation, np.ndarray):
       rotation = torch.from_numpy(rotation)
 
@@ -23,28 +24,12 @@ class   Rotation:
   def numpy(self) -> np.ndarray:
     return self._data.numpy()
   
-  def rotate(self, vector : torch.Tensor) -> torch.Tensor:
-    assert isinstance(vector, torch.Tensor)
-    # return (self * Rotation(, normalize=False) * self.inv())._data[:3]
-  
-    r = torch.tensor([0.0, *vector])
-    q = self._data[[3, 0, 1, 2]]
+  def rotate(self, vec : torch.Tensor) -> torch.Tensor:
+    # Implement rotation using PyTorch operations
+    q = self._data
+    t = 2 * torch.linalg.cross(q[:3], vec.to(q.dtype))
+    return vec + q[3] * t + torch.linalg.cross(q[:3], t)
 
-    q = torch.tensor([
-      r[0] * q[0] - r[1] * q[1] - r[2] * q[2] - r[3] * q[3], # w
-    
-      r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2], # x
-      r[0] * q[2] + r[1] * q[3] + r[2] * q[0] - r[3] * q[1], # y
-      r[0] * q[3] - r[1] * q[2] + r[2] * q[1] + r[3] * q[0], # z
-    ])
-
-    r = self.inv()._data[[3, 0, 1, 2]]
-
-    return torch.tensor([
-      r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2], # x
-      r[0] * q[2] + r[1] * q[3] + r[2] * q[0] - r[3] * q[1], # y
-      r[0] * q[3] - r[1] * q[2] + r[2] * q[1] + r[3] * q[0], # z
-    ])
 
 
 
@@ -63,22 +48,32 @@ class   Rotation:
     return Rotation(self._data.clone())
 
   def __mul__(self, other):
-    assert isinstance(other, Rotation)
+    # Quaternion multiplication using PyTorch operations
+    q1 = self._data
+    q2 = other._data
+    w = q1[3] * q2[3] - torch.dot(q1[:3], q2[:3])
+    xyz = q1[3] * q2[:3] + q2[3] * q1[:3] + torch.linalg.cross(q1[:3], q2[:3])
+    return Rotation(torch.cat((xyz, w.unsqueeze(0))))
 
-    r = other._data[[3, 0, 1, 2]]
-    q = self._data[[3, 0, 1, 2]]
 
-    quat = torch.tensor([
-      r[0] * q[1] + r[1] * q[0] - r[2] * q[3] + r[3] * q[2], # x
-      r[0] * q[2] + r[1] * q[3] + r[2] * q[0] - r[3] * q[1], # y
-      r[0] * q[3] - r[1] * q[2] + r[2] * q[1] + r[3] * q[0], # z
+  def to_euler(self) -> torch.Tensor:
+    # Convert quaternion to Euler angles using PyTorch operations
+    q = self._data
+    ysqr = q[1] * q[1]
 
-      r[0] * q[0] - r[1] * q[1] - r[2] * q[2] - r[3] * q[3], # w
-    ])
-     
-    quat /= torch.norm(quat)
+    t0 = +2.0 * (q[3] * q[0] + q[1] * q[2])
+    t1 = +1.0 - 2.0 * (q[0] * q[0] + ysqr)
+    X = torch.atan2(t0, t1)
 
-    return Rotation(quat)
+    t2 = +2.0 * (q[3] * q[1] - q[2] * q[0])
+    t2 = torch.clamp(t2, -1.0, 1.0)
+    Y = torch.asin(t2)
+
+    t3 = +2.0 * (q[3] * q[2] + q[0] * q[1])
+    t4 = +1.0 - 2.0 * (ysqr + q[2] * q[2])
+    Z = torch.atan2(t3, t4)
+
+    return torch.stack([X, Y, Z])
   
 
   def __repr__(self):

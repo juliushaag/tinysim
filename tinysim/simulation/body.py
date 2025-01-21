@@ -10,6 +10,7 @@ from tinysim.simulation.joint import Joint
 
 import mujoco as mj
 
+
 @dataclass
 class SceneBody:
   name: str
@@ -30,7 +31,6 @@ class SceneBody:
 
   @classmethod
   def from_spec(cls, spec, parent = None):
-    print(spec.quat.copy()[[1, 2, 3, 0]])
     body =  cls(
       name=spec.name,
 
