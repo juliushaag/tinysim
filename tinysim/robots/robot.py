@@ -11,7 +11,7 @@ from tinysim.simulation.body import SceneBody
 import importlib
 import inspect
 
-from tinysim.core.transform import Rotation
+from tinysim.core.transform import Rotation, Transform, chain_transforms
 
 import torch
 import matplotlib.pyplot as plt
@@ -85,69 +85,47 @@ class Robot(Element, ABC):
   def chain(self) -> list[SceneBody]:
     return list(self._base_to_end_effector)
 
-  def forward_kinematic(self, qpos : torch.tensor = None, jacobian : np.ndarray = None) -> Tuple[torch.Tensor, Rotation]:
+  def forward_kinematic(self, qpos : torch.Tensor = None) -> Transform:
 
-    if qpos is None: qpos = torch.tensor([joint.qpos.item() for joint in self.joints])
+    qpos : torch.Tensor = qpos if qpos is not None else torch.tensor([joint.qpos.item() for joint in self.joints])
 
     assert len(qpos) == len(self.joints)
-    assert jacobian is None or jacobian.shape == (6, len(self.joints))
+    transform = self.base.xtransform.copy()
 
-    position = self.base.xpos
-    rotation = self.base.xrot
 
-    qpos : torch.Tensor = qpos.clone().requires_grad_()
-
-    qpos_i = 0
+    transform = [self.base.xtransform]
     for body in self.chain:
-
-      position = position + rotation.rotate(body.ipos)
-      rotation = rotation * body.irot
-
-   
-
-        
+      transform.append(body.itransform)
       for joint in body.joints:
-        position = position + rotation.rotate(joint.translation)
-        rotation = rotation *  joint.twist
+        transform.append(joint.transform(qpos[joint.id]))
 
-        half_angle = qpos[qpos_i] / 2
-        quat = torch.cat([half_angle.sin() * joint.axis, half_angle.cos().unsqueeze(0)])
-        rotation = rotation * Rotation(quat)
-
-        qpos_i += 1
-
-
-    position = position + rotation.rotate(self.end_effector.ipos)
-    rotation = rotation * self.end_effector.irot
-
-    euler = rotation.to_euler()
-
-    if jacobian is not None:
-      for i in range(3):
-        grad  = torch.autograd.grad(position[i], [qpos], create_graph=True)[0]
-        jacobian[i] = grad
-
-      for i in range(3):
-        grad = torch.autograd.grad(euler[i], [qpos], create_graph=True)[0]
-        jacobian[i + 3] = grad
-
-    return position, rotation
+    transform.append(self.end_effector.itransform)
+    
+    return chain_transforms(transform)
 
   def inverse_kinematic(self, position : list, step_length = 0.01) -> torch.Tensor:
 
-    qpos = torch.tensor([joint.qpos.item() for joint in self.joints])
+    qpos = torch.tensor([joint.qpos.item() for joint in self.joints]).requires_grad_()
     
     position = torch.tensor(position, dtype=torch.float64) 
 
-    jacobian = torch.zeros((6, len(self.joints)), dtype=torch.float64)
+    jacobian = torch.zeros((3, len(self.joints)), dtype=torch.float64)
 
-    pos, rot = self.forward_kinematic(qpos=qpos, jacobian=jacobian)
-    while not np.allclose(pos.detach().numpy(), position, atol=1e-5):
+    transform = self.forward_kinematic(qpos)
 
-      loss = (pos - position)
-      qpos = qpos - step_length * 2 * (jacobian[:3].T @ loss)
+    for i in range(3):
+      grad  = torch.autograd.grad(transform.position[i], [qpos], create_graph=True)[0]
+      jacobian[i] = grad
+
+    while not np.allclose(transform.position.detach().numpy(), position, atol=1e-4):
+
+      loss = (transform.position - position)
+      qpos = qpos - step_length * 2 * (jacobian.T @ loss)
       
-      pos, rot = self.forward_kinematic(qpos=qpos, jacobian=jacobian)
+      transform = self.forward_kinematic(qpos)
+      for i in range(3):
+        grad  = torch.autograd.grad(transform.position[i], [qpos], create_graph=True)[0]
+        jacobian[i] = grad
  
     return qpos.detach()
     

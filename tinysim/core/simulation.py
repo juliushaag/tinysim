@@ -66,7 +66,7 @@ class Simulation:
     # update sim bodies pose
     for obj in self.objects:
       obj.xpos = torch.from_numpy(self.data.xpos[obj.id].copy())
-      obj.xrot = Rotation(self.data.xquat[obj.id][[1, 2, 3, 0]].copy())
+      obj.xrot = Rotation(torch.from_numpy(self.data.xquat[obj.id][[1, 2, 3, 0]].copy()))
 
     for joint in self.joints:
       joint.qpos = self.data.qpos[self.model.jnt(joint.id).qposadr].copy()

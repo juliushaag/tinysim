@@ -38,7 +38,7 @@ class SimulationRenderer():
   def is_running(self):
     return True
   
-  def render_point(self, pos : np.ndarray, color : np.ndarray, size : float):
+  def render_point(self, name : str,  pos : torch.Tensor, color=torch.tensor([1, 0, 0, 1]), size=torch.tensor([0.02, 0.0, 0.0])):
     ...
 
 class MjRenderer(SimulationRenderer):

@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Tuple
@@ -6,7 +7,7 @@ import numpy as np
 import mujoco as mj
 import torch
 
-from tinysim.core.transform import Rotation
+from tinysim.core.transform import Rotation, Transform
 
 class JointType(str, Enum):
   FREE = "FREE",
@@ -24,7 +25,7 @@ class JointType(str, Enum):
     } [mj_type]
   
 @dataclass
-class Joint:
+class Joint(ABC):
   id : int
   name : str
   qpos : np.ndarray
@@ -43,6 +44,10 @@ class Joint:
       return SlideJoint.from_spec(spec)
     
     assert False
+
+  @abstractmethod
+  def transform(self, qpos = None):
+    ...
 
   def __repr__(self):
     return f"<{__name__} {self.name} type={self.type} qpos={self.qpos.item():.2f} qvel={self.qvel.item():2f}]>"
@@ -67,6 +72,13 @@ class SlideJoint(Joint):
       qvel=np.zeros(1)
     )
 
+  def transform(self, qpos = None):
+    return Transform(
+      position = self.twist.apply(self.translation) + self.axis * qpos,
+      rotation = self.twist
+    )
+
+
 @dataclass
 class HingeJoint(Joint):
   axis : torch.Tensor
@@ -86,3 +98,10 @@ class HingeJoint(Joint):
       qpos=np.zeros(1),
       qvel=np.zeros(1)
     )
+  
+  def transform(self, qpos = None):
+    return Transform(
+      position = self.twist.apply(self.translation),
+      rotation = self.twist * Rotation.from_angle_axis(qpos, self.axis)
+    )
+

@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from typing import List
 
+from tinysim.core.transform import Transform
 import numpy as np
 import torch
 
@@ -17,11 +18,8 @@ class SceneBody:
   id : int = -1
   movable: bool = False
 
-  xpos: torch.Tensor = field(default_factory=lambda: torch.zeros(3))
-  xrot: Rotation = field(default_factory=Rotation)
-
-  ipos : torch.Tensor = field(default_factory=lambda: torch.zeros(3))
-  irot : Rotation  = field(default_factory=Rotation)
+  xtransform : Transform = field(default_factory=Transform.idenity)
+  itransform : Transform = field(default_factory=Transform.idenity)
 
   joints : list[Joint] = field(default_factory=lambda: list())
   children: list["SceneBody"] = field(default_factory=lambda: list())
@@ -33,11 +31,7 @@ class SceneBody:
   def from_spec(cls, spec, parent = None):
     body =  cls(
       name=spec.name,
-
-
-      ipos=torch.from_numpy(spec.pos.copy()), 
-      irot=Rotation(spec.quat.copy()[[1, 2, 3, 0]]),
-
+      itransform=Transform(position=torch.from_numpy(spec.pos.copy()), rotation=Rotation(torch.from_numpy(spec.quat.copy())[[1, 2, 3, 0]])),
       movable = len(spec.joints) > 0,
       parent=parent,
       id=None,
@@ -68,17 +62,17 @@ class SceneBody:
   
   @property
   def rpos(self) -> np.ndarray:
-    if not self.movable: return self.ipos
-    if not self.parent: return self.xpos
+    if not self.movable: return self.itransform.position
+    if not self.parent: return self.xtransform.position
 
-    return self.parent.xrot.inv().rotate(self.xpos - self.parent.rpos)
+    return self.parent.xtransform.inv().apply(self.xtransform.position - self.parent.rpos)
   
   @property
   def rrot(self) -> Rotation:
-    if not self.movable: return self.irot
-    if not self.parent: return self.xrot
+    if not self.movable: return self.itransform.rotation
+    if not self.parent: return self.xtransform.rotation
 
-    return self.xrot * self.parent.rrot.inv()
+    return self.xtransform.rotation * self.parent.xtransform.rotation.inv()
 
   def __repr__(self):
     return f"<SceneBody {self.name} children=[{",".join(obj.name for obj in self.children)}]>"
