@@ -73,8 +73,9 @@ class SlideJoint(Joint):
     )
 
   def transform(self, qpos = None):
+    qpos = qpos if qpos is not None else self.qpos
     return Transform(
-      position = self.twist.apply(self.translation) + self.axis * qpos,
+      position = self.translation + self.axis * qpos,
       rotation = self.twist
     )
 
@@ -94,14 +95,15 @@ class HingeJoint(Joint):
       axis=torch.from_numpy(spec.axis.copy()),
       range=(spec.range[0], spec.range[1]),
       translation=torch.from_numpy(spec.pos.copy()),
-      twist=Rotation(),
-      qpos=np.zeros(1),
-      qvel=np.zeros(1)
+      twist=Rotation.identity(),
+      qpos=torch.zeros(1),
+      qvel=torch.zeros(1)
     )
   
   def transform(self, qpos = None):
+    qpos = qpos if qpos is not None else self.qpos
     return Transform(
-      position = self.twist.apply(self.translation),
-      rotation = self.twist * Rotation.from_angle_axis(qpos, self.axis)
+      position = self.translation,
+      rotation = self.twist * Rotation.from_rotvec(qpos * self.axis)
     )
 

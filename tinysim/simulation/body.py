@@ -31,7 +31,10 @@ class SceneBody:
   def from_spec(cls, spec, parent = None):
     body =  cls(
       name=spec.name,
-      itransform=Transform(position=torch.from_numpy(spec.pos.copy()), rotation=Rotation(torch.from_numpy(spec.quat.copy())[[1, 2, 3, 0]])),
+      itransform=Transform(
+        position=torch.from_numpy(spec.pos.copy()), 
+        rotation=Rotation(torch.from_numpy(spec.quat.copy()[[1, 2, 3, 0]]))
+      ),
       movable = len(spec.joints) > 0,
       parent=parent,
       id=None,
@@ -40,7 +43,6 @@ class SceneBody:
     )
     body.children = [SceneBody.from_spec(child, body) for child in spec.bodies]
     body.joints = [Joint.from_spec(joint) for joint in spec.joints]
-    
     return body
   
   def attach(self, body : "SceneBody", namespace : str) -> "SceneBody":

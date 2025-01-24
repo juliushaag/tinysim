@@ -1,9 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
-import mujoco as mj
 import numpy as np
 
 from tinysim.scene.element import Element
@@ -11,13 +8,13 @@ from tinysim.simulation.body import SceneBody
 import importlib
 import inspect
 
-from tinysim.core.transform import Rotation, Transform, chain_transforms
-
+from tinysim.core.transform import Rotation, Transform
+import tinysim
 import torch
 import matplotlib.pyplot as plt
 from torchviz import make_dot
 
-ROBOTS_PATH = Path(__file__).parent
+ROBOTS_PATH = Path(tinysim.__path__[0]) / "robots"
 ROBOTS = { path.name : path / "robot.py" for path in ROBOTS_PATH.iterdir() if path.is_dir() and (path /  (path.name + ".py")).is_file()}
 
 
@@ -90,32 +87,29 @@ class Robot(Element, ABC):
     qpos : torch.Tensor = qpos if qpos is not None else torch.tensor([joint.qpos.item() for joint in self.joints])
 
     assert len(qpos) == len(self.joints)
-    transform = self.base.xtransform.copy()
 
-
-    transform = [self.base.xtransform]
+    transform = self.base.xtransform
     for body in self.chain:
-      transform.append(body.itransform)
+      transform = transform * body.itransform
       for joint in body.joints:
-        transform.append(joint.transform(qpos[joint.id]))
+        transform = transform * joint.transform(qpos[joint.id])
 
-    transform.append(self.end_effector.itransform)
-    
-    return chain_transforms(transform)
+    transform = transform * self.end_effector.itransform
+    return transform
 
   def inverse_kinematic(self, position : list, step_length = 0.01) -> torch.Tensor:
 
-    qpos = torch.tensor([joint.qpos.item() for joint in self.joints]).requires_grad_()
     
     position = torch.tensor(position, dtype=torch.float64) 
-
     jacobian = torch.zeros((3, len(self.joints)), dtype=torch.float64)
+    qpos = torch.tensor([joint.qpos.item() for joint in self.joints]).requires_grad_()
 
     transform = self.forward_kinematic(qpos)
 
     for i in range(3):
       grad  = torch.autograd.grad(transform.position[i], [qpos], create_graph=True)[0]
       jacobian[i] = grad
+
 
     while not np.allclose(transform.position.detach().numpy(), position, atol=1e-4):
 

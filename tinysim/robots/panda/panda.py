@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import numpy as np
-from tinysim.robots.robot import Robot
+from tinysim.simulation.robot import Robot
 import mujoco
 
 from tinysim.simulation.body import SceneBody
