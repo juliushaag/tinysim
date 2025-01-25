@@ -14,6 +14,9 @@ import torch
 import matplotlib.pyplot as plt
 from torchviz import make_dot
 
+
+from tinysim.core.profile import Profile
+
 ROBOTS_PATH = Path(tinysim.__path__[0]) / "robots"
 ROBOTS = { path.name : path / "robot.py" for path in ROBOTS_PATH.iterdir() if path.is_dir() and (path /  (path.name + ".py")).is_file()}
 
@@ -82,11 +85,13 @@ class Robot(Element, ABC):
   def chain(self) -> list[SceneBody]:
     return list(self._base_to_end_effector)
 
+  @Profile.register
   def forward_kinematic(self, qpos : torch.Tensor = None) -> Transform:
 
     qpos : torch.Tensor = qpos if qpos is not None else torch.tensor([joint.qpos.item() for joint in self.joints])
 
     assert len(qpos) == len(self.joints)
+
 
     transform = self.base.xtransform
     for body in self.chain:
